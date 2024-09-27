@@ -1,86 +1,38 @@
-provider "aws" {
-  region = var.aws_region
-}
+resource "aws_security_group" "default" {
+  for_each = var.security_groups
 
-resource "aws_vpc" "vpc" {
-  cidr_block = var.vpc_cidr
-  enable_dns_support = true
-  enable_dns_hostnames = true
+  name        = each.key
+  description = each.value.description
+  vpc_id      = var.vpc_id
 
-  tags = {
-    Name = "${var.prefix}-vpc"
+  dynamic "ingress" {
+    for_each = each.value.ingress_rules != null ? each.value.ingress_rules : []
+
+    content {
+      description     = ingress.value.description
+      from_port       = ingress.value.from_port
+      to_port         = ingress.value.to_port
+      protocol        = ingress.value.protocol
+      cidr_blocks     = ingress.value.cidr_blocks != null ? ingress.value.cidr_blocks : null
+      security_groups = ingress.value.security_groups != null ? ingress.value.security_groups : null
+    }
+  }
+
+  dynamic "egress" {
+    for_each = each.value.egress_rules != null ? each.value.egress_rules : []
+
+
+    content {
+      description     = egress.value.description
+      from_port       = egress.value.from_port
+      to_port         = egress.value.to_port
+      protocol        = egress.value.protocol
+      cidr_blocks     = egress.value.cidr_blocks != null ? egress.value.cidr_blocks : null
+      security_groups = egress.value.security_groups != null ? egress.value.security_groups : null
+    }
   }
 }
 
-resource "aws_subnet" "subnet" {
-  vpc_id            = aws_vpc.vpc.id
-  cidr_block        = var.subnet_cidr
-  availability_zone = var.availability_zone
-
-  tags = {
-    Name = "${var.prefix}-subnet"
-  }
-}
-
-resource "aws_internet_gateway" "igw" {
-  vpc_id = aws_vpc.vpc.id
-
-  tags = {
-    Name = "${var.prefix}-igw"
-  }
-}
-
-resource "aws_route_table" "route_table" {
-  vpc_id = aws_vpc.vpc.id
-
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.igw.id
-  }
-
-  tags = {
-    Name = "${var.prefix}-route-table"
-  }
-}
-
-resource "aws_route_table_association" "route_table_association" {
-  subnet_id      = aws_subnet.subnet.id
-  route_table_id = aws_route_table.route_table.id
-}
-
-# Security Group Modules
-module "bastion_security_group" {
-  source         = "./path/to/your/security_group_module"
-  security_groups = var.bastion_security_groups
-  vpc_id         = aws_vpc.vpc.id
-}
-
-module "web_security_group" {
-  source         = "./path/to/your/security_group_module"
-  security_groups = var.web_security_groups
-  vpc_id         = aws_vpc.vpc.id
-}
-
-module "web_security_group1" {
-  source         = "./path/to/your/security_group_module"
-  security_groups = var.web_security_groups1
-  vpc_id         = aws_vpc.vpc.id
-}
-
-module "app_security_group" {
-  source         = "./path/to/your/security_group_module"
-  security_groups = var.app_security_groups
-  vpc_id         = aws_vpc.vpc.id
-}
-
-module "app_security_group1" {
-  source         = "./path/to/your/security_group_module"
-  security_groups = var.app_security_groups1
-  vpc_id         = aws_vpc.vpc.id
-}
-
-module "db_security_group" {
-  source         = "./path/to/your/security_group_module"
-  security_groups = var.db_security_groups
-  vpc_id         = aws_vpc.vpc.id
+output "security_group_id" {
+  value = { for k, v in aws_security_group.default : k => v.id }
 }
